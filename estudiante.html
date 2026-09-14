@@ -147,8 +147,13 @@
 
     // Validar Sesión
     const usuarioActivo = JSON.parse(sessionStorage.getItem("usuarioActivo") || "null");
-    if (!usuarioActivo) {
-      window.location.href = "index.html";
+    
+    // Muestra el enlace a secret.html a docentes y estudiantes privilegiados
+    if (usuarioActivo && (usuarioActivo.rol === "docente" || usuarioActivo.rol === "privilegiado")) {
+      const btnMuroSecreto = document.getElementById("btn-muro-secreto");
+      if (btnMuroSecreto) {
+        btnMuroSecreto.classList.remove("d-none");
+      }
     }
 
     document.getElementById("user-display").innerHTML =

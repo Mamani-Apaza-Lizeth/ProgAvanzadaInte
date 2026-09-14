@@ -132,7 +132,7 @@
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_utnY7OECRDGSr5bbOixnFQ__W4iaOGH";
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-    const usuarioActivo = JSON.parse(sessionStorage.getItem("usuarioActivo") || "null");
+    let usuarioActivo = JSON.parse(sessionStorage.getItem("usuarioActivo") || "null");
     if (!usuarioActivo) window.location.href = "index.html";
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -143,7 +143,7 @@
     let esAmigo = false;
 
     async function init() {
-      // 1. Cargar usuario del perfil
+      // 1. Cargar usuario del perfil directamente de la base de datos
       const { data: user, error } = await supabaseClient.from("usuarios").select("*").eq("id", targetUserId).single();
       if (error || !user) { alert("Usuario no encontrado."); return; }
       targetUser = user;
@@ -151,14 +151,14 @@
       // Renderizar UI Básica
       document.getElementById("profile-nombre").textContent = targetUser.nombre_completo;
       document.getElementById("profile-ru").textContent = `RU: ${targetUser.ru}`;
-      document.getElementById("profile-rol").textContent = targetUser.rol.toUpperCase();
+      document.getElementById("profile-rol").textContent = (targetUser.rol || "Estudiante").toUpperCase();
       document.getElementById("profile-bio").textContent = targetUser.biografia || "Sin biografía aún.";
 
       if (targetUser.foto_perfil) {
         document.getElementById("avatar-container").innerHTML = `<img src="${targetUser.foto_perfil}" class="avatar-large">`;
       }
 
-      // 2. Si es mi perfil, mostrar edición
+      // 2. Si es mi perfil, mostrar edición y precargar
       if (esMiPerfil) {
         document.getElementById("edit-section").classList.remove("d-none");
         document.getElementById("edit-bio").value = targetUser.biografia || "";
@@ -171,8 +171,8 @@
       cargarAmigos();
 
       // 4. Configurar Chat si es amigo o si uno de los dos es docente
-      const esDocenteEnInvolucrado=(usuarioActivo.rol==="docente"||targetUser.rol==="docente");
-      if (!esMiPerfil&&(esAmigo||esDocenteEnInvolucrado)) {
+      const esDocenteEnInvolucrado = (usuarioActivo.rol === "docente" || targetUser.rol === "docente");
+      if (!esMiPerfil && (esAmigo || esDocenteEnInvolucrado)) {
         habilitarChat();
       }
     }
@@ -200,7 +200,6 @@
       ]);
 
       if (!error) {
-        // Registrar en feed publico
         await supabaseClient.from("feed_eventos").insert([{
           tipo: "amigo",
           descripcion: `🤝 @${usuarioActivo.nombre_completo} agregó a @${targetUser.nombre_completo} como amigo.`
@@ -228,7 +227,7 @@
 
       data.forEach(item => {
         const friend = item.amigo;
-        if(friend) {
+        if (friend) {
           friendsList.innerHTML += `
             <a href="perfil.html?id=${friend.id}" class="btn btn-sm btn-outline-light rounded-pill">
               <i class="bi bi-person me-1"></i>${friend.nombre_completo.split(' ')[0]}
@@ -243,7 +242,6 @@
       document.getElementById("chat-btn").disabled = false;
       cargarMensajes();
       
-      // Suscribirse a mensajes en tiempo real
       supabaseClient.channel('chat-room')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes' }, payload => {
           const msg = payload.new;
@@ -289,27 +287,56 @@
       }]);
     });
 
-    // EDITAR MI PERFIL
+    // Convierte una imagen subida localmente a formato String Base64 seguro
+    function leerImagenComoBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // EDITAR MI PERFIL (CORREGIDO Y SIN DEPENDER DE PERMISOS DE STORAGE)
     document.getElementById("form-edit-profile").addEventListener("submit", async (e) => {
       e.preventDefault();
+      const saveBtn = document.getElementById("btn-save-profile");
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Guardando...`;
+
       const bio = document.getElementById("edit-bio").value.trim();
       const fileInput = document.getElementById("edit-foto");
 
       let fotoUrl = targetUser.foto_perfil;
+
+      // Si seleccionó un archivo nuevo
       if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        const fileName = `perfil_${Date.now()}_${file.name}`;
-        const { error: uploadErr } = await supabaseClient.storage.from("capturas").upload(fileName, file);
-        if (!uploadErr) {
-          fotoUrl = supabaseClient.storage.from("capturas").getPublicUrl(fileName).data.publicUrl;
+        try {
+          fotoUrl = await leerImagenComoBase64(fileInput.files[0]);
+        } catch (err) {
+          console.error("Error al leer la imagen:", err);
         }
       }
 
-      const { error } = await supabaseClient.from("usuarios").update({ biografia: bio, foto_perfil: fotoUrl }).eq("id", usuarioActivo.id);
-      if (!error) {
-        alert("Perfil actualizado correctamente.");
-        window.location.reload();
+      // Guardar en Supabase
+      const { error } = await supabaseClient.from("usuarios")
+        .update({ biografia: bio, foto_perfil: fotoUrl })
+        .eq("id", usuarioActivo.id);
+
+      if (error) {
+        alert("Ocurrió un error al guardar los cambios: " + error.message);
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Guardar Cambios";
+        return;
       }
+
+      // Sincronizar sessionStorage local para reflejar los cambios en todo el sitio inmediatamente
+      usuarioActivo.biografia = bio;
+      usuarioActivo.foto_perfil = fotoUrl;
+      sessionStorage.setItem("usuarioActivo", JSON.stringify(usuarioActivo));
+
+      alert("¡Perfil actualizado con éxito!");
+      window.location.reload();
     });
 
     init();

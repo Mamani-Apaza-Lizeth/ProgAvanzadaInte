@@ -145,22 +145,19 @@
     const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_utnY7OECRDGSr5bbOixnFQ__W4iaOGH";
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-    // Validar Sesión
+    // ✅ Guard de Sesión
     const usuarioActivo = JSON.parse(sessionStorage.getItem("usuarioActivo") || "null");
-    
-    // Muestra el enlace a secret.html a docentes y estudiantes privilegiados
-    if (usuarioActivo && (usuarioActivo.rol === "docente" || usuarioActivo.rol === "privilegiado")) {
-      const btnMuroSecreto = document.getElementById("btn-muro-secreto");
-      if (btnMuroSecreto) {
-        btnMuroSecreto.classList.remove("d-none");
+
+    if (!usuarioActivo) {
+      window.location.href = "index.html";
+    } else {
+      document.getElementById("user-display").innerHTML =
+        `<i class="bi bi-person-circle"></i> ${usuarioActivo.nombre_completo}`;
+
+      // Mostrar botón "Modo Privado" solo si es privilegiado o docente
+      if (usuarioActivo.rol === "privilegiado" || usuarioActivo.rol === "docente") {
+        document.getElementById("btn-modo-privado").classList.remove("d-none");
       }
-    }
-
-    document.getElementById("user-display").innerHTML =
-      `<i class="bi bi-person-circle"></i> ${usuarioActivo.nombre_completo}`;
-
-    if (usuarioActivo.rol === "privilegiado" || usuarioActivo.rol === "docente") {
-      document.getElementById("btn-modo-privado").classList.remove("d-none");
     }
 
     const grid = document.getElementById("students-grid");
@@ -193,7 +190,7 @@
         return;
       }
 
-      const esDocente = (usuarioActivo.rol === "docente");
+      const esDocente = (usuarioActivo && usuarioActivo.rol === "docente");
 
       lista.forEach((est) => {
         const contenidoAvatar = est.foto_perfil 
@@ -235,6 +232,7 @@
     }
 
     async function darRespeto(id) {
+      if (!usuarioActivo) return;
       if (id === usuarioActivo.id) {
         alert("No puedes darte +1 Respeto a ti mismo 😉");
         return;
@@ -276,8 +274,9 @@
       renderEstudiantes(filtrados);
     });
 
-    // Iniciar carga
-    cargarEstudiantes();
+    if (usuarioActivo) {
+      cargarEstudiantes();
+    }
   </script>
 </body>
 </html>

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfil de Usuario</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg-main: #0b0f19;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(165, 180, 252, 0.2);
+      --text-primary: #f8fafc;
+      --accent-mint: #2dd4bf;
+      --accent-lavender: #c999c9e6;
+    }
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+    }
+    .profile-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+    }
+    .avatar-large {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      border: 3px solid var(--accent-lavender);
+      object-fit: cover;
+    }
+    .chat-box {
+      height: 300px;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .msg-bubble {
+      max-width: 75%;
+      padding: 8px 14px;
+      border-radius: 15px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+    .msg-mine {
+      background: #4f46e5;
+      color: white;
+      margin-left: auto;
+    }
+    .msg-other {
+      background: #334155;
+      color: white;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body class="p-3 p-md-5">
+
+  <div class="container" style="max-width: 900px;">
+    <a href="estudiante.html" class="btn btn-outline-light btn-sm mb-4 rounded-pill">
+      <i class="bi bi-arrow-left"></i> Volver al Directorio
+    </a>
+
+    <div class="row g-4">
+      <!-- DETALLES DEL PERFIL -->
+      <div class="col-md-5">
+        <div class="profile-card p-4 text-center">
+          <div id="avatar-container" class="mb-3">
+            <i class="bi bi-person-circle display-1 text-secondary"></i>
+          </div>
+          <h4 id="profile-nombre" class="fw-bold mb-1">Cargando...</h4>
+          <p id="profile-ru" class="text-muted small">RU: —</p>
+          <span id="profile-rol" class="badge bg-primary rounded-pill mb-3">Estudiante</span>
+          
+          <p id="profile-bio" class="small text-light opacity-75 fst-italic">Sin biografía aún.</p>
+
+          <div id="actions-area" class="d-grid gap-2 mt-3"></div>
+        </div>
+
+        <!-- AMIGOS DE ESTE USUARIO -->
+        <div class="profile-card p-3 mt-4">
+          <h6 class="fw-bold mb-3"><i class="bi bi-people-fill text-info me-2"></i>Amigos</h6>
+          <div id="friends-list" class="d-flex flex-wrap gap-2">
+            <span class="text-muted small">Cargando amigos...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- EDICIÓN Y CHAT PRIVADO -->
+      <div class="col-md-7">
+        <!-- FORMULARIO DE EDICIÓN (SOLO PROPIETARIO) -->
+        <div id="edit-section" class="profile-card p-4 mb-4 d-none">
+          <h5 class="fw-bold mb-3"><i class="bi bi-pencil-square me-2"></i>Editar mi Perfil</h5>
+          <form id="form-edit-profile">
+            <div class="mb-3">
+              <label class="form-label small">Biografía / Presentación</label>
+              <textarea id="edit-bio" class="form-control bg-dark text-light border-secondary" rows="3" placeholder="Escribe algo sobre ti..."></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small">Actualizar Foto de Perfil</label>
+              <input type="file" id="edit-foto" accept="image/*" class="form-control bg-dark text-light border-secondary">
+            </div>
+            <button type="submit" id="btn-save-profile" class="btn btn-success btn-sm rounded-pill w-100">Guardar Cambios</button>
+          </form>
+        </div>
+
+        <!-- SECCIÓN DE CHAT PRIVADO -->
+        <div id="chat-section" class="profile-card p-4">
+          <h5 class="fw-bold mb-3"><i class="bi bi-chat-dots-fill me-2 text-warning"></i>Chat Privado</h5>
+          <div id="chat-box" class="chat-box d-flex flex-column mb-3">
+            <p class="text-muted small align-self-center my-auto">Selecciona o agrega a un compañero para hablar.</p>
+          </div>
+          <form id="form-chat" class="d-flex gap-2">
+            <input type="text" id="chat-input" class="form-control bg-dark text-light border-secondary" placeholder="Escribe un mensaje..." disabled required>
+            <button type="submit" id="chat-btn" class="btn btn-primary" disabled><i class="bi bi-send-fill"></i></button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://lpgesqdonpofoerpopkk.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_utnY7OECRDGSr5bbOixnFQ__W4iaOGH";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+    const usuarioActivo = JSON.parse(sessionStorage.getItem("usuarioActivo") || "null");
+    if (!usuarioActivo) window.location.href = "index.html";
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetUserId = urlParams.get("id") || usuarioActivo.id;
+    const esMiPerfil = (targetUserId === usuarioActivo.id);
+
+    let targetUser = null;
+    let esAmigo = false;
+
+    async function init() {
+      // 1. Cargar usuario del perfil
+      const { data: user, error } = await supabaseClient.from("usuarios").select("*").eq("id", targetUserId).single();
+      if (error || !user) { alert("Usuario no encontrado."); return; }
+      targetUser = user;
+
+      // Renderizar UI Básica
+      document.getElementById("profile-nombre").textContent = targetUser.nombre_completo;
+      document.getElementById("profile-ru").textContent = `RU: ${targetUser.ru}`;
+      document.getElementById("profile-rol").textContent = targetUser.rol.toUpperCase();
+      document.getElementById("profile-bio").textContent = targetUser.biografia || "Sin biografía aún.";
+
+      if (targetUser.foto_perfil) {
+        document.getElementById("avatar-container").innerHTML = `<img src="${targetUser.foto_perfil}" class="avatar-large">`;
+      }
+
+      // 2. Si es mi perfil, mostrar edición
+      if (esMiPerfil) {
+        document.getElementById("edit-section").classList.remove("d-none");
+        document.getElementById("edit-bio").value = targetUser.biografia || "";
+      } else {
+        await verificarAmistad();
+        renderizarBotonesAccion();
+      }
+
+      // 3. Cargar Amigos
+      cargarAmigos();
+
+      // 4. Configurar Chat si es amigo o si uno de los dos es docente
+      const esDocenteEnInvolucrado=(usuarioActivo.rol==="docente"||targetUser.rol==="docente");
+      if (!esMiPerfil&&(esAmigo||esDocenteEnInvolucrado)) {
+        habilitarChat();
+      }
+    }
+
+    async function verificarAmistad() {
+      const { data } = await supabaseClient.from("amigos")
+        .select("*")
+        .eq("usuario_id", usuarioActivo.id)
+        .eq("amigo_id", targetUserId);
+      esAmigo = data && data.length > 0;
+    }
+
+    function renderizarBotonesAccion() {
+      const actionsArea = document.getElementById("actions-area");
+      if (esAmigo) {
+        actionsArea.innerHTML = `<button class="btn btn-outline-success btn-sm rounded-pill" disabled><i class="bi bi-check-lg"></i> Son Amigos</button>`;
+      } else {
+        actionsArea.innerHTML = `<button onclick="agregarAmigo()" class="btn btn-primary btn-sm rounded-pill"><i class="bi bi-person-plus-fill"></i> Agregar Amigo</button>`;
+      }
+    }
+
+    async function agregarAmigo() {
+      const { error } = await supabaseClient.from("amigos").insert([
+        { usuario_id: usuarioActivo.id, amigo_id: targetUserId }
+      ]);
+
+      if (!error) {
+        // Registrar en feed publico
+        await supabaseClient.from("feed_eventos").insert([{
+          tipo: "amigo",
+          descripcion: `🤝 @${usuarioActivo.nombre_completo} agregó a @${targetUser.nombre_completo} como amigo.`
+        }]);
+
+        esAmigo = true;
+        renderizarBotonesAccion();
+        cargarAmigos();
+        habilitarChat();
+      }
+    }
+
+    async function cargarAmigos() {
+      const { data } = await supabaseClient.from("amigos")
+        .select("amigo:amigo_id(id, nombre_completo, foto_perfil)")
+        .eq("usuario_id", targetUserId);
+
+      const friendsList = document.getElementById("friends-list");
+      friendsList.innerHTML = "";
+
+      if (!data || data.length === 0) {
+        friendsList.innerHTML = `<span class="text-muted small">Aún no tiene amigos agregados.</span>`;
+        return;
+      }
+
+      data.forEach(item => {
+        const friend = item.amigo;
+        if(friend) {
+          friendsList.innerHTML += `
+            <a href="perfil.html?id=${friend.id}" class="btn btn-sm btn-outline-light rounded-pill">
+              <i class="bi bi-person me-1"></i>${friend.nombre_completo.split(' ')[0]}
+            </a>`;
+        }
+      });
+    }
+
+    // ---------------- CHAT EN TIEMPO REAL ----------------
+    function habilitarChat() {
+      document.getElementById("chat-input").disabled = false;
+      document.getElementById("chat-btn").disabled = false;
+      cargarMensajes();
+      
+      // Suscribirse a mensajes en tiempo real
+      supabaseClient.channel('chat-room')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes' }, payload => {
+          const msg = payload.new;
+          if ((msg.emisor_id === usuarioActivo.id && msg.receptor_id === targetUserId) ||
+              (msg.emisor_id === targetUserId && msg.receptor_id === usuarioActivo.id)) {
+            dibujarMensaje(msg);
+          }
+        }).subscribe();
+    }
+
+    async function cargarMensajes() {
+      const { data: mensajes } = await supabaseClient.from("mensajes")
+        .select("*")
+        .or(`and(emisor_id.eq.${usuarioActivo.id},receptor_id.eq.${targetUserId}),and(emisor_id.eq.${targetUserId},receptor_id.eq.${usuarioActivo.id})`)
+        .order("created_at", { ascending: true });
+
+      const chatBox = document.getElementById("chat-box");
+      chatBox.innerHTML = "";
+      if (mensajes) mensajes.forEach(dibujarMensaje);
+    }
+
+    function dibujarMensaje(msg) {
+      const chatBox = document.getElementById("chat-box");
+      const esMio = msg.emisor_id === usuarioActivo.id;
+      const div = document.createElement("div");
+      div.className = `msg-bubble ${esMio ? 'msg-mine' : 'msg-other'}`;
+      div.textContent = msg.contenido;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    document.getElementById("form-chat").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("chat-input");
+      const texto = input.value.trim();
+      if (!texto) return;
+
+      input.value = "";
+      await supabaseClient.from("mensajes").insert([{
+        emisor_id: usuarioActivo.id,
+        receptor_id: targetUserId,
+        contenido: texto
+      }]);
+    });
+
+    // EDITAR MI PERFIL
+    document.getElementById("form-edit-profile").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const bio = document.getElementById("edit-bio").value.trim();
+      const fileInput = document.getElementById("edit-foto");
+
+      let fotoUrl = targetUser.foto_perfil;
+      if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const fileName = `perfil_${Date.now()}_${file.name}`;
+        const { error: uploadErr } = await supabaseClient.storage.from("capturas").upload(fileName, file);
+        if (!uploadErr) {
+          fotoUrl = supabaseClient.storage.from("capturas").getPublicUrl(fileName).data.publicUrl;
+        }
+      }
+
+      const { error } = await supabaseClient.from("usuarios").update({ biografia: bio, foto_perfil: fotoUrl }).eq("id", usuarioActivo.id);
+      if (!error) {
+        alert("Perfil actualizado correctamente.");
+        window.location.reload();
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

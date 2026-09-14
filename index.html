@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Estudiantil — Universidad</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      min-height: 100vh;
+      background-image: url(https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQnbbMRpa4qwB5j6F8PmODCb6-1H17cGC5eAJKOEl0HBrO8X382t40dMiZx&s=10);
+      background-size: cover;
+      background-position: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      color: #fbfafa;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 24px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      width: 100%;
+      max-width: 420px;
+      padding: 2.5rem 2rem;
+    }
+    .avatar-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem auto;
+      font-size: 2.5rem;
+      color: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .glass-input {
+      background: rgba(255, 255, 255, 0.1) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: #ffffff !important;
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+    }
+    .glass-input::placeholder { color: rgba(255, 255, 255, 0.5); }
+    .glass-input:focus {
+      background: rgba(255, 255, 255, 0.2) !important;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+      border-color: rgba(255, 255, 255, 0.4) !important;
+    }
+    .btn-glass {
+      background: linear-gradient(90deg, #67448a 0%, #2850bc 100%);
+      border: none;
+      color: rgb(249, 247, 247);
+      font-weight: 600;
+      border-radius: 12px;
+      padding: 0.75rem;
+      transition: all 0.3s ease;
+    }
+    .btn-glass:hover {
+      background: linear-gradient(90deg, #a821a6 0%, #9333ea 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+    }
+    .toggle-link {
+      color: #ffffff;
+      text-decoration: underline;
+      cursor: pointer;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="glass-card text-center">
+    <div class="avatar-icon"><i class="bi bi-person-fill"></i></div>
+    <h3 id="form-title" class="fw-bold mb-4">Iniciar Sesión</h3>
+    <div id="alert-msg" class="alert d-none text-start py-2 fs-6" role="alert"></div>
+
+    <form id="auth-form">
+      <div class="mb-3 text-start">
+        <label class="form-label text-light fs-7">Nombre Completo</label>
+        <div class="input-group">
+          <span class="input-group-text glass-input border-end-0"><i class="bi bi-person"></i></span>
+          <input type="text" id="input-nombre" class="form-control glass-input border-start-0" placeholder="Ej. Juan Pérez García" required>
+        </div>
+      </div>
+
+      <div class="mb-4 text-start">
+        <label class="form-label text-light fs-7">Registro Universitario (RU)</label>
+        <div class="input-group">
+          <span class="input-group-text glass-input border-end-0"><i class="bi bi-card-heading"></i></span>
+          <input type="text" id="input-ru" class="form-control glass-input border-start-0" placeholder="Ej. 12345" required>
+        </div>
+      </div>
+
+      <!-- CAMBIO 1: Agrega este bloque debajo del campo de RU -->
+      <div class="mb-4 text-start d-none" id="group-foto">
+        <label class="form-label text-light fs-7">Foto de Perfil (Opcional)</label>
+        <div class="input-group">
+          <span class="input-group-text glass-input border-end-0"><i class="bi bi-image"></i></span>
+          <input type="file" id="input-foto" accept="image/*" class="form-control glass-input border-start-0">
+        </div>
+      </div>
+
+      <button type="submit" id="btn-submit" class="btn btn-glass w-100 mb-3">Entrar al Portal</button>
+    </form>
+
+    <p id="toggle-text" class="mb-0 fs-6 text-light opacity-75">
+      ¿No estás registrado? <span class="toggle-link" onclick="alternarModo('registro')">Registrarme</span>
+    </p>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://lpgesqdonpofoerpopkk.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_utnY7OECRDGSr5bbOixnFQ__W4iaOGH";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+    const RU_DOCENTE = "78854844"; 
+    const RUS_PRIVILEGIADOS = ["64440", "58979","64468","64690","64187","64092","64204","52657","51584","58046","64091","63682","64474"]; 
+
+    let modoActual = 'login';
+    const groupFoto = document.getElementById('group-foto');
+    const formTitle = document.getElementById('form-title');
+    const btnSubmit = document.getElementById('btn-submit');
+    const toggleText = document.getElementById('toggle-text');
+    const alertMsg = document.getElementById('alert-msg');
+    const authForm = document.getElementById('auth-form');
+
+    function alternarModo(nuevoModo) {
+      modoActual = nuevoModo;
+      ocultarAlerta();
+      if (modoActual === 'registro') {
+        formTitle.textContent = "Nuevo Registro";
+        btnSubmit.textContent = "Crear Cuenta";
+        groupFoto.classList.remove('d-none'); // <--- AÑADE ESTA LÍNEA (Muestra el campo de foto)
+        toggleText.innerHTML = `¿Ya tienes cuenta? <span class="toggle-link" onclick="alternarModo('login')">Iniciar Sesión</span>`;
+      } else {
+        formTitle.textContent = "Iniciar Sesión";
+        btnSubmit.textContent = "Entrar al Portal";
+        groupFoto.classList.add('d-none');    // <--- AÑADE ESTA LÍNEA (Oculta el campo de foto)
+        toggleText.innerHTML = `¿No estás registrado? <span class="toggle-link" onclick="alternarModo('registro')">Registrarme</span>`;
+      }
+    }
+
+    function mostrarAlerta(mensaje, esError = true) {
+      alertMsg.className = `alert ${esError ? 'alert-danger' : 'alert-success'} text-start py-2 fs-6`;
+      alertMsg.textContent = mensaje;
+      alertMsg.classList.remove('d-none');
+    }
+
+    function ocultarAlerta() { alertMsg.classList.add('d-none'); }
+
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nombre = document.getElementById('input-nombre').value.trim();
+      const ru = document.getElementById('input-ru').value.trim();
+
+      if (!nombre || !ru) {
+        mostrarAlerta("Por favor completa todos los campos.");
+        return;
+      }
+
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = "Verificando...";
+
+try {
+  const { data, error } = await supabaseClient.from('usuarios').select('*').eq('ru', ru);
+  if (error) throw error;
+
+  if (modoActual === 'registro') {
+    if (data && data.length > 0) {
+      mostrarAlerta("Este RU ya está registrado. Inicia sesión.");
+    } else {
+      let rolAsignado = 'estudiante';
+      if (ru === RU_DOCENTE) {
+        rolAsignado = 'docente';
+      } else if (RUS_PRIVILEGIADOS.includes(ru)) {
+        rolAsignado = 'privilegiado';
+      }
+
+      // --- 1. SUBIR FOTO A SUPABASE STORAGE ---
+      let fotoUrl = null;
+      const fileInput = document.getElementById('input-foto');
+      if (fileInput && fileInput.files.length > 0) {
+        const archivo = fileInput.files[0];
+        const nombreArchivo = `perfil_${Date.now()}_${archivo.name}`;
+        const { error: uploadError } = await supabaseClient.storage
+          .from('capturas')
+          .upload(nombreArchivo, archivo);
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabaseClient.storage
+            .from('capturas')
+            .getPublicUrl(nombreArchivo);
+          fotoUrl = publicUrlData.publicUrl;
+        }
+      }
+
+      // --- 2. INSERTAR USUARIO (CON LA FOTO) ---
+      const { error: insertError } = await supabaseClient.from('usuarios').insert([
+        { 
+          nombre_completo: nombre, 
+          ru: ru, 
+          rol: rolAsignado, 
+          foto_perfil: fotoUrl 
+        }
+      ]);
+
+      if (insertError) throw insertError;
+
+      mostrarAlerta("¡Registro exitoso! Ya puedes iniciar sesión.", false);
+      setTimeout(() => alternarModo('login'), 1500);
+    }
+  } else {
+    // Lógica para Iniciar Sesión...
+    if (!data || data.length === 0) {
+      mostrarAlerta("El usuario no existe. Regístrate primero.");
+    } else {
+      const usuario = data[0];
+      sessionStorage.setItem('usuarioActivo', JSON.stringify(usuario));
+      mostrarAlerta("¡Bienvenido! Redirigiendo...", false);
+
+      setTimeout(() => {
+        if (usuario.rol === 'privilegiado' || usuario.rol === 'docente') {
+          window.location.href = "secret.html";
+        } else {
+          window.location.href = "estudiante.html";
+        }
+      }, 1000);
+    }
+  }
+} catch (err) {
+  console.error("Error en Supabase:", err);
+  mostrarAlerta("Ocurrió un error al conectar con la base de datos.");
+} finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = modoActual === 'registro' ? "Crear Cuenta" : "Entrar al Portal";
+      }
+    });
+  </script>
+</body>
+</html>
